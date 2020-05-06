@@ -105,29 +105,37 @@ update msg model =
   case msg of
     Change newContent ->
         ({ model | content = newContent ++ model.content }, Cmd.none)
+
     NewTextField ->
         ({ model | textFields = (TextField "testName" "") :: model.textFields }, Cmd.none)
+
     NewParagraph ->
         ({ model | paragraphs = (Paragraph "Some text") :: model.paragraphs }, Cmd.none)
+
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
+
     Draw ->
-        ({ model | connections =
-              case model.drawStart of
-                  Just (x, y) ->
-                      (Line (x, y) (model.mouse.offsetX, model.mouse.offsetY) :: model.connections)
-                  Nothing ->
-                      model.connections
-        , drawStart =
-              case model.drawStart of
-                  Nothing ->
-                      Just (model.mouse.offsetX, model.mouse.offsetY)
-                  _ ->
-                      Nothing
-        }, elemNameFromPoint (model.mouse.offsetX, model.mouse.offsetY))
+        if model.editing then
+            ({ model | connections =
+                   case model.drawStart of
+                       Just (x, y) ->
+                           (Line (x, y) (model.mouse.offsetX, model.mouse.offsetY) :: model.connections)
+                       Nothing ->
+                           model.connections
+             , drawStart =
+                 case model.drawStart of
+                     Nothing ->
+                         Just (model.mouse.offsetX, model.mouse.offsetY)
+                     _ ->
+                         Nothing
+             }, elemNameFromPoint (model.mouse.offsetX, model.mouse.offsetY))
+        else
+            (model, Cmd.none)
 
     ElemNameUpdate name ->
         ({ model | name = name }, Cmd.none)
+
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
 
