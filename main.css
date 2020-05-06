@@ -13,3 +13,8 @@ body {
     position: absolute;
     z-index: -100;
 }
+
+.controls {
+    float: right;
+    width: 150px;
+}

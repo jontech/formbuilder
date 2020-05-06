@@ -178,25 +178,26 @@ drawLine (startx, starty) (endx, endy) =
         
 view : Model -> Html Msg
 view model =
-    div [ class (String.join " " [ "canvas"
-                                 ])
-        , on "mousemove" (Decode.map MouseMove decoder)
-        , onClick Draw
-        ] [ svg [ height 1000
-                , width 1000
-                , viewBox "0 0 1000 1000"
-                ]
-                ((case model.drawStart of
-                      Just (x, y) -> 
-                          drawLine (x, y) (model.mouse.offsetX, model.mouse.offsetY)
-                      Nothing ->
-                          text "") :: (List.map
-                                           (\connect -> drawLine connect.starts connect.ends)
-                                           model.connections))
-          , button [ onClick NewTextField ] [ text "New text field" ]
-          , button [ onClick NewParagraph ] [ text "New paragraph" ]
-          , button [ onClick EditMode ] [ text "Edit mode" ]                       
-          , div [] (List.map (\tf -> createTextField tf) model.textFields)
-          , div [] [ text (String.reverse model.content) ]
-          , div [] (List.map (\p -> createParagraph p) model.paragraphs)
-          ]
+    div [] [ div [ class "controls"
+                 ] [ button [ onClick NewTextField ] [ text "New text field" ]
+                   , button [ onClick NewParagraph ] [ text "New paragraph" ]
+                   , button [ onClick EditMode ] [ text "Edit mode" ]
+                   ]
+           , div [ class "canvas"
+                 , on "mousemove" (Decode.map MouseMove decoder)
+                 , onClick Draw
+                 ] [ svg [ height 1000
+                         , width 1000
+                         , viewBox "0 0 1000 1000"
+                         ]
+                         ((case model.drawStart of
+                               Just (x, y) -> 
+                                   drawLine (x, y) (model.mouse.offsetX, model.mouse.offsetY)
+                               Nothing ->
+                                   text ""
+                          ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
+                   , div [] (List.map (\tf -> createTextField tf) model.textFields)
+                   , div [] [ text (String.reverse model.content) ]
+                   , div [] (List.map (\p -> createParagraph p) model.paragraphs)
+                   ]
+           ]
