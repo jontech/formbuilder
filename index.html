@@ -1,0 +1,29 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Main</title>
+  <link rel="stylesheet" href="main.css">
+  <script src="main.js"></script>
+</head>
+
+<body>
+  <div id="elm-main"></div>
+  <script>
+      var app = Elm.Main.init({
+        node: document.getElementById("elm-main")
+      });
+
+      app.ports.elemNameFromPoint.subscribe(function(offset) {
+        var element = document.elementFromPoint(
+          offset[0],
+          offset[1]
+        );
+        console.log(element);
+        app.ports.elemNameUpdate.send((element.name !== undefined) ? element.name : "undefined");
+      });
+  </script>
+</body>
+
+</html>

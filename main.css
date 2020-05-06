@@ -1,0 +1,15 @@
+body {
+    margin: 0px;
+    padding: 0px;
+}
+
+.canvas {
+    width: 1000px;
+    height: 1000px;
+    position: relative;
+    border: 1px solid red;
+}
+.canvas > svg {
+    position: absolute;
+    z-index: -100;
+}
