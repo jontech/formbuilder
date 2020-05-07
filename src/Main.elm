@@ -95,7 +95,8 @@ type Msg
   | NewTextField
   | NewParagraph
   | MouseMove MouseMoveData
-  | Draw
+  | DrawStart
+  | DrawEnd
   | ElemNameUpdate String
   | EditMode
 
@@ -120,24 +121,21 @@ update msg model =
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
 
-    Draw ->
-        if model.editing then
-            ({ model | connections =
-                   case model.drawStart of
-                       Just (x, y) ->
-                           (Line (x, y) (model.mouse.offsetX, model.mouse.offsetY) :: model.connections)
-                       Nothing ->
-                           model.connections
-             , drawStart =
-                 case model.drawStart of
-                     Nothing ->
-                         Just (model.mouse.offsetX, model.mouse.offsetY)
-                     _ ->
-                         Nothing
-             }, elemNameFromPoint (model.mouse.offsetX, model.mouse.offsetY))
-        else
-            (model, Cmd.none)
+    DrawStart ->
+        ({ model | drawStart = Just (model.mouse.offsetX, model.mouse.offsetY) }
+        , elemNameFromPoint (model.mouse.offsetX, model.mouse.offsetY))
 
+    DrawEnd ->
+        ({ model | connections =
+               (case model.drawStart of
+                   Just (x, y) ->
+                       (Line (x, y) (model.mouse.offsetX, model.mouse.offsetY) :: model.connections)
+                   _ ->
+                       model.connections)
+         , drawStart = Nothing
+         }
+        , Cmd.none)
+            
     ElemNameUpdate name ->
         ({ model | name = Debug.log "-->" name }, Cmd.none)
 
@@ -190,7 +188,8 @@ view model =
                    ]
            , div [ class "canvas"
                  , on "mousemove" (Decode.map MouseMove decoder)
-                 , onClick Draw
+                 , onMouseDown DrawStart
+                 , onMouseUp DrawEnd
                  ] [ svg [ height 1000
                          , width 1000
                          , viewBox "0 0 1000 1000"
@@ -202,7 +201,6 @@ view model =
                                    text ""
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
                    , div [] (List.map (\tf -> createTextField tf) model.textFields)
-                   , div [] [ text (String.reverse model.content) ]
                    , div [] (List.map (\p -> createParagraph p) (Dict.values model.paragraphs))
                    ]
            ]
