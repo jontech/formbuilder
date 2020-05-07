@@ -8,7 +8,7 @@ import Svg exposing (svg, line)
 import Svg
 import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
 import Json.Decode as Decode exposing (Decoder, map2, field, float, int)
-
+import Dict exposing (Dict)
 
 -- PORTS
 
@@ -58,7 +58,7 @@ type alias Line =
 type alias Model =
   { content : String
   , textFields : List TextField
-  , paragraphs : List Paragraph
+  , paragraphs : Dict String Paragraph
   , mouse : MouseMoveData
   , connections : List Line
   , drawStart : Maybe (Int, Int)
@@ -71,7 +71,7 @@ init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
   , textFields = []
-  , paragraphs = []
+  , paragraphs = Dict.empty
   , mouse = MouseMoveData 0 0
   , connections = []
   , drawStart = Nothing
@@ -91,7 +91,7 @@ decoder =
 
 
 type Msg
-  = Change String
+  = Change String String
   | NewTextField
   | NewParagraph
   | MouseMove MouseMoveData
@@ -103,14 +103,19 @@ type Msg
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
-    Change newContent ->
-        ({ model | content = newContent ++ model.content }, Cmd.none)
+    Change name newContent ->
+        -- find p in Dict by `name` of input element and update its value
+        ({ model | paragraphs = Dict.update
+               name
+               (Maybe.map (\v -> Paragraph (v.value ++ newContent)))
+               model.paragraphs
+         }, Cmd.none)
 
     NewTextField ->
-        ({ model | textFields = (TextField "testName" "") :: model.textFields }, Cmd.none)
+        ({ model | textFields = (TextField "new" "") :: model.textFields }, Cmd.none)
 
     NewParagraph ->
-        ({ model | paragraphs = (Paragraph "Some text") :: model.paragraphs }, Cmd.none)
+        ({ model | paragraphs = Dict.insert "new" (Paragraph "Some text") (Debug.log "" model.paragraphs) }, Cmd.none)
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
@@ -134,7 +139,7 @@ update msg model =
             (model, Cmd.none)
 
     ElemNameUpdate name ->
-        ({ model | name = name }, Cmd.none)
+        ({ model | name = Debug.log "-->" name }, Cmd.none)
 
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
@@ -155,7 +160,7 @@ createTextField textField =
     input [ placeholder "Some text"
           , name textField.name
           , value textField.value
-          , onInput Change
+          , onInput (Change textField.name)
           ] []
 
         
@@ -198,6 +203,6 @@ view model =
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
                    , div [] (List.map (\tf -> createTextField tf) model.textFields)
                    , div [] [ text (String.reverse model.content) ]
-                   , div [] (List.map (\p -> createParagraph p) model.paragraphs)
+                   , div [] (List.map (\p -> createParagraph p) (Dict.values model.paragraphs))
                    ]
            ]
