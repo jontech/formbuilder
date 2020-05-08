@@ -40,9 +40,7 @@ type alias MouseMoveData =
 
     
 type alias TextField =
-    { id : String
-    , value : String
-    }
+    { value : String }
 
     
 type alias Paragraph =
@@ -57,7 +55,7 @@ type alias Line =
     
 type alias Model =
   { content : String
-  , textFields : List TextField
+  , textFields : Dict String TextField
   , paragraphs : Dict String Paragraph
   , mouse : MouseMoveData
   , connections : List Line
@@ -70,7 +68,7 @@ type alias Model =
 init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
-  , textFields = []
+  , textFields = Dict.empty
   , paragraphs = Dict.empty
   , mouse = MouseMoveData 0 0
   , connections = []
@@ -114,11 +112,12 @@ update msg model =
          }, Cmd.none)
 
     NewTextField ->
-        ({ model | textFields = (TextField "1" "") :: model.textFields
+        ({ model | textFields = Dict.insert "1" (TextField "") model.textFields
          }, Cmd.none)
 
     NewParagraph ->
-        ({ model | paragraphs = Dict.insert "2" (Paragraph "Some text") model.paragraphs }, Cmd.none)
+        ({ model | paragraphs = Dict.insert "2" (Paragraph "Some text") model.paragraphs
+         }, Cmd.none)
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
@@ -163,12 +162,12 @@ subscriptions _ = elemFromToUpdate ElemFromTo
 -- VIEW
 
 
-createTextField : TextField -> Html Msg
-createTextField textField = 
+createTextField : String -> TextField -> Html Msg
+createTextField elemId textField = 
     input [ placeholder "Some text"
-          , id textField.id
+          , id elemId
           , value textField.value
-          , onInput (Change textField.id)
+          , onInput (Change elemId)
           ] []
 
         
@@ -209,7 +208,7 @@ view model =
                                Nothing ->
                                    text ""
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
-                   , div [] (List.map (\tf -> createTextField tf) model.textFields)
+                   , div [] (List.map (\(id, tf) -> createTextField id tf) (Dict.toList model.textFields))
                    , div [] (List.map (\(id, p) -> createParagraph id p) (Dict.toList model.paragraphs))
                    ]
            ]
