@@ -13,8 +13,8 @@ import Dict exposing (Dict)
 -- PORTS
 
 
-port elemNameFromPoint : (Int, Int) -> Cmd msg
-port elemNameUpdate : (String -> msg) -> Sub msg                   
+port elemFromTo : ((Int, Int), (Int, Int)) -> Cmd msg
+port elemFromToUpdate : ((String, String) -> msg) -> Sub msg                   
 
 
 -- MAIN
@@ -40,7 +40,7 @@ type alias MouseMoveData =
 
     
 type alias TextField =
-    { name : String
+    { id : String
     , value : String
     }
 
@@ -62,8 +62,8 @@ type alias Model =
   , mouse : MouseMoveData
   , connections : List Line
   , drawStart : Maybe (Int, Int)
-  , name : String
   , editing : Bool
+  , sourceTarget : List (String, String)
   }
 
 
@@ -75,8 +75,8 @@ init _ =
   , mouse = MouseMoveData 0 0
   , connections = []
   , drawStart = Nothing
-  , name = ""
-  , editing = False       
+  , editing = False
+  , sourceTarget = []
   }, Cmd.none)
 
 
@@ -97,47 +97,57 @@ type Msg
   | MouseMove MouseMoveData
   | DrawStart
   | DrawEnd
-  | ElemNameUpdate String
+  | ElemFromTo (String, String)
   | EditMode
 
 
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
-    Change name newContent ->
+    Change id newContent ->
         -- find p in Dict by `name` of input element and update its value
-        ({ model | paragraphs = Dict.update
-               name
-               (Maybe.map (\v -> Paragraph (v.value ++ newContent)))
-               model.paragraphs
+        ({ model | paragraphs =
+               List.filter (\(src, trg) -> src == id) model.sourceTarget
+                    |> (List.foldr
+                            (\(src, trg) res -> Dict.update trg (Maybe.map (\v -> Paragraph (v.value ++ newContent))) res)
+                 model.paragraphs)
          }, Cmd.none)
 
     NewTextField ->
-        ({ model | textFields = (TextField "new" "") :: model.textFields }, Cmd.none)
+        ({ model | textFields = (TextField "1" "") :: model.textFields
+         }, Cmd.none)
 
     NewParagraph ->
-        ({ model | paragraphs = Dict.insert "new" (Paragraph "Some text") (Debug.log "" model.paragraphs) }, Cmd.none)
+        ({ model | paragraphs = Dict.insert "2" (Paragraph "Some text") model.paragraphs }, Cmd.none)
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
 
     DrawStart ->
-        ({ model | drawStart = Just (model.mouse.offsetX, model.mouse.offsetY) }
-        , elemNameFromPoint (model.mouse.offsetX, model.mouse.offsetY))
+        let
+            start = (model.mouse.offsetX, model.mouse.offsetY)
+        in
+            ({ model | drawStart = Just start }, Cmd.none)
 
     DrawEnd ->
-        ({ model | connections =
-               (case model.drawStart of
-                   Just (x, y) ->
-                       (Line (x, y) (model.mouse.offsetX, model.mouse.offsetY) :: model.connections)
-                   _ ->
-                       model.connections)
-         , drawStart = Nothing
-         }
-        , Cmd.none)
+        case model.drawStart of
+             Just (startX, startY) ->
+                 let
+                     start = (startX, startY)
+                     end = (model.mouse.offsetX, model.mouse.offsetY)
+                 in
+                     ({ model | connections = (Line start end) :: model.connections
+                      , drawStart = Nothing
+                      }
+                     , elemFromTo (start, end)
+                     )
+             Nothing ->
+                 (model, Cmd.none)
             
-    ElemNameUpdate name ->
-        ({ model | name = Debug.log "-->" name }, Cmd.none)
+    ElemFromTo (startId, endId) ->
+        ( { model | sourceTarget = (Debug.log "fromto" (startId, endId)) :: model.sourceTarget }
+        , Cmd.none
+        )
 
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
@@ -147,7 +157,7 @@ update msg model =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ = elemNameUpdate ElemNameUpdate
+subscriptions _ = elemFromToUpdate ElemFromTo
 
 
 -- VIEW
@@ -156,15 +166,15 @@ subscriptions _ = elemNameUpdate ElemNameUpdate
 createTextField : TextField -> Html Msg
 createTextField textField = 
     input [ placeholder "Some text"
-          , name textField.name
+          , id textField.id
           , value textField.value
-          , onInput (Change textField.name)
+          , onInput (Change textField.id)
           ] []
 
         
-createParagraph : Paragraph -> Html msg
-createParagraph paragraph =
-    p [] [ text paragraph.value ]
+createParagraph : String -> Paragraph -> Html msg
+createParagraph elemId paragraph =
+    p [ id elemId ] [ text paragraph.value ]
 
 
 drawLine : (Int, Int) -> (Int, Int) -> Svg.Svg msg
@@ -177,8 +187,7 @@ drawLine (startx, starty) (endx, endy) =
          , strokeWidth "10"
          , strokeLinecap "round"
          ] []
-    
-        
+
 view : Model -> Html Msg
 view model =
     div [] [ div [ class "controls"
@@ -201,6 +210,6 @@ view model =
                                    text ""
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
                    , div [] (List.map (\tf -> createTextField tf) model.textFields)
-                   , div [] (List.map (\p -> createParagraph p) (Dict.values model.paragraphs))
+                   , div [] (List.map (\(id, p) -> createParagraph id p) (Dict.toList model.paragraphs))
                    ]
            ]

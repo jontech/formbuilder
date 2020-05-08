@@ -15,13 +15,14 @@
         node: document.getElementById("elm-main")
       });
 
-      app.ports.elemNameFromPoint.subscribe(function(offset) {
-        var element = document.elementFromPoint(
-          offset[0],
-          offset[1]
-        );
-        console.log(element);
-        app.ports.elemNameUpdate.send((element.name !== undefined) ? element.name : "undefined");
+      app.ports.elemFromTo.subscribe(function(startEnd) {
+        var elemStart = document.elementFromPoint(
+          startEnd[0][0],
+          startEnd[0][1]);
+        var elemEnd = document.elementFromPoint(
+          startEnd[1][0],
+          startEnd[1][1]);
+        app.ports.elemFromToUpdate.send([elemStart.id, elemEnd.id]);
       });
   </script>
 </body>
