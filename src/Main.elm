@@ -104,7 +104,7 @@ type Msg
 
 nextSeq : List SeqElement -> Int
 nextSeq elems =
-    List.map (\elem -> elem.seq) elems |> List.maximum |> (Maybe.withDefault 0) |> (+) 1
+    List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0 |> (+) 1
 
         
 appendParagraph : String -> SeqElement -> SeqElement
