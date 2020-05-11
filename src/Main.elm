@@ -50,11 +50,6 @@ type alias SeqElement =
     }
           
 
-lastSeq : List SeqElement -> Int
-lastSeq elems =
-    List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0
-      
-
 type alias Line =
     { starts : (Int, Int)
     , ends : (Int, Int)
@@ -107,35 +102,57 @@ type Msg
   | EditMode
 
 
+nextSeq : List SeqElement -> Int
+nextSeq elems =
+    List.map (\elem -> elem.seq) elems |> List.maximum |> (Maybe.withDefault 0) |> (+) 1
+
+        
+appendParagraph : String -> SeqElement -> SeqElement
+appendParagraph newVal seqElem =
+    { seqElem | elem = case seqElem.elem of
+                           Paragraph val ->
+                               Paragraph (val ++ newVal)
+                           _ ->
+                               seqElem.elem
+     }
+
+
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
-    Change id newContent ->
+    Change id inputVal ->
         ({ model | paragraphs =
-               List.filter (\(src, trg) -> src == id) model.sourceTarget
-                    |> (List.foldr
-                            (\(src, trg) res ->
-                                 Dict.update trg (Maybe.map (\seqElem -> {seqElem | elem = case seqElem.elem of
-                                                                          Paragraph val -> Paragraph (val ++ newContent)
-                                                                          _ -> seqElem.elem
-                                                                     }
-                                                            )) res)
-                            model.paragraphs)
+               List.filter (\(src, _) -> src == id) model.sourceTarget
+                    |> List.foldr
+                       (\(_, trg) res -> Dict.update
+                            trg
+                            (Maybe.map (appendParagraph inputVal))
+                            res
+                       )
+                       model.paragraphs
          }, Cmd.none)
 
     NewTextField ->
         let
-            seq = (lastSeq (Dict.values model.textFields)) + 1
+            seq = nextSeq (Dict.values model.textFields)
         in
-            ({ model | textFields = Dict.insert (String.fromInt seq) (SeqElement seq TextField) model.textFields }
+            ({ model | textFields = Dict.insert
+                   (String.fromInt seq)
+                   (SeqElement seq TextField)
+                   model.textFields
+             }
             , Cmd.none
             )
 
     NewParagraph ->
         let
-            seq = (lastSeq (Dict.values model.paragraphs)) + 1
+            seq = nextSeq (Dict.values model.paragraphs)
         in
-            ({ model | paragraphs = Dict.insert (String.fromInt seq) (SeqElement seq (Paragraph "Some text")) model.paragraphs }
+            ({ model | paragraphs = Dict.insert
+                   (String.fromInt seq)
+                   (SeqElement seq (Paragraph "Some text"))
+                   model.paragraphs
+             }
             , Cmd.none
             )
 
@@ -164,7 +181,12 @@ update msg model =
                  (model, Cmd.none)
             
     ElemFromTo (startId, endId) ->
-        ( { model | sourceTarget = if model.editing then (startId, endId) :: model.sourceTarget else model.sourceTarget }
+        ( { model | sourceTarget =
+                if model.editing then
+                    (startId, endId) :: model.sourceTarget
+                else
+                    model.sourceTarget
+          }
         , Cmd.none
         )
 
@@ -182,8 +204,8 @@ subscriptions _ = elemFromToUpdate ElemFromTo
 -- VIEW
 
 renderElement : String -> SeqElement -> Html Msg
-renderElement elemId seq =
-    case seq.elem of
+renderElement elemId seqElem =
+    case seqElem.elem of
         TextField ->
             input [ placeholder "Some text"
                   , id elemId
