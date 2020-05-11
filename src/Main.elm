@@ -38,15 +38,23 @@ type alias MouseMoveData =
     , offsetY : Int
     }
 
-    
-type alias TextField =
-    { value : String }
 
-    
-type alias Paragraph =
-    { value : String }
+type Element
+    = TextField
+    | Paragraph String
 
-        
+
+type alias SeqElement =
+    { seq : Int
+    , elem : Element
+    }
+          
+
+lastSeq : List SeqElement -> Int
+lastSeq elems =
+    List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0
+      
+
 type alias Line =
     { starts : (Int, Int)
     , ends : (Int, Int)
@@ -55,8 +63,8 @@ type alias Line =
     
 type alias Model =
   { content : String
-  , textFields : Dict String TextField
-  , paragraphs : Dict String Paragraph
+  , textFields : Dict String SeqElement
+  , paragraphs : Dict String SeqElement
   , mouse : MouseMoveData
   , connections : List Line
   , drawStart : Maybe (Int, Int)
@@ -103,21 +111,33 @@ update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
     Change id newContent ->
-        -- find p in Dict by `name` of input element and update its value
         ({ model | paragraphs =
-               List.filter (\(src, trg) -> src == id) model.sourceTarget
+               List.filter (\(src, trg) -> src == id) (Debug.log "sourcetarget" model.sourceTarget)
                     |> (List.foldr
-                            (\(src, trg) res -> Dict.update trg (Maybe.map (\v -> Paragraph (v.value ++ newContent))) res)
-                 model.paragraphs)
+                            (\(src, trg) res ->
+                                 Dict.update trg (Maybe.map (\seqElem -> {seqElem | elem = case seqElem.elem of
+                                                                          Paragraph val -> Paragraph (val ++ newContent)
+                                                                          _ -> seqElem.elem
+                                                                     }
+                                                            )) res)
+                            model.paragraphs)
          }, Cmd.none)
 
     NewTextField ->
-        ({ model | textFields = Dict.insert "1" (TextField "") model.textFields
-         }, Cmd.none)
+        let
+            seq = (lastSeq (Dict.values model.textFields)) + 1
+        in
+            ({ model | textFields = Dict.insert (String.fromInt seq) (SeqElement seq TextField) model.textFields }
+            , Cmd.none
+            )
 
     NewParagraph ->
-        ({ model | paragraphs = Dict.insert "2" (Paragraph "Some text") model.paragraphs
-         }, Cmd.none)
+        let
+            seq = (lastSeq (Dict.values model.paragraphs)) + 1
+        in
+            ({ model | paragraphs = Dict.insert (String.fromInt seq) (SeqElement seq (Paragraph "Some text")) model.paragraphs }
+            , Cmd.none
+            )
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
@@ -144,7 +164,7 @@ update msg model =
                  (model, Cmd.none)
             
     ElemFromTo (startId, endId) ->
-        ( { model | sourceTarget = (Debug.log "fromto" (startId, endId)) :: model.sourceTarget }
+        ( { model | sourceTarget = if model.editing then (startId, endId) :: model.sourceTarget else model.sourceTarget }
         , Cmd.none
         )
 
@@ -161,19 +181,17 @@ subscriptions _ = elemFromToUpdate ElemFromTo
 
 -- VIEW
 
-
-createTextField : String -> TextField -> Html Msg
-createTextField elemId textField = 
-    input [ placeholder "Some text"
-          , id elemId
-          , value textField.value
-          , onInput (Change elemId)
-          ] []
-
-        
-createParagraph : String -> Paragraph -> Html msg
-createParagraph elemId paragraph =
-    p [ id elemId ] [ text paragraph.value ]
+renderElement : String -> SeqElement -> Html Msg
+renderElement elemId seq =
+    case seq.elem of
+        TextField ->
+            input [ placeholder "Some text"
+                  , id elemId
+                  , value ""
+                  , onInput (Change elemId)
+                  ] []
+        Paragraph val ->
+            p [ id elemId ] [ text val ]
 
 
 drawLine : (Int, Int) -> (Int, Int) -> Svg.Svg msg
@@ -186,6 +204,7 @@ drawLine (startx, starty) (endx, endy) =
          , strokeWidth "10"
          , strokeLinecap "round"
          ] []
+
 
 view : Model -> Html Msg
 view model =
@@ -208,7 +227,7 @@ view model =
                                Nothing ->
                                    text ""
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
-                   , div [] (List.map (\(id, tf) -> createTextField id tf) (Dict.toList model.textFields))
-                   , div [] (List.map (\(id, p) -> createParagraph id p) (Dict.toList model.paragraphs))
+                   , div [] (List.map (\(id, tf) -> renderElement id tf) (Dict.toList model.textFields))
+                   , div [] (List.map (\(id, p) -> renderElement id p) (Dict.toList model.paragraphs))
                    ]
            ]
