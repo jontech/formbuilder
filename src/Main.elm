@@ -112,7 +112,7 @@ update msg model =
   case msg of
     Change id newContent ->
         ({ model | paragraphs =
-               List.filter (\(src, trg) -> src == id) (Debug.log "sourcetarget" model.sourceTarget)
+               List.filter (\(src, trg) -> src == id) model.sourceTarget
                     |> (List.foldr
                             (\(src, trg) res ->
                                  Dict.update trg (Maybe.map (\seqElem -> {seqElem | elem = case seqElem.elem of
