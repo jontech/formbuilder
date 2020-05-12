@@ -61,8 +61,9 @@ type alias Model =
   , textFields : Dict String SeqElement
   , paragraphs : Dict String SeqElement
   , mouse : MouseMoveData
-  , connections : List Line
+  , sourceTargetDrawing : List Line
   , drawStart : Maybe (Int, Int)
+  , drawEnd : Maybe (Int, Int)
   , editing : Bool
   , sourceTarget : List (String, String)
   }
@@ -74,8 +75,9 @@ init _ =
   , textFields = Dict.singleton "1" { seq = 1, elem = TextField }
   , paragraphs = Dict.singleton "1" { seq = 1, elem = Paragraph ""}
   , mouse = MouseMoveData 0 0
-  , connections = []
+  , sourceTargetDrawing = []
   , drawStart = Nothing
+  , drawEnd = Nothing
   , editing = False
   , sourceTarget = []
   }, Cmd.none)
@@ -163,7 +165,10 @@ update msg model =
         let
             start = (model.mouse.offsetX, model.mouse.offsetY)
         in
-            (if model.editing then { model | drawStart = Just start } else model
+            (if model.editing then
+                 { model | drawStart = Just start }
+             else
+                 model
             , Cmd.none
             )
 
@@ -174,27 +179,41 @@ update msg model =
                      start = (startX, startY)
                      end = (model.mouse.offsetX, model.mouse.offsetY)
                  in
-                     ({ model | connections = (Line start end) :: model.connections
-                      , drawStart = Nothing
-                      }
-                     , elemFromTo (start, end)
-                     )
+                     ({ model | drawEnd = Just end }, elemFromTo (start, end))
              Nothing ->
                  (model, Cmd.none)
             
-    ElemFromTo (startId, endId) ->
-        ( { model | sourceTarget =
-                if model.editing then
-                    (startId, endId) :: model.sourceTarget
-                else
-                    model.sourceTarget
-          }
+    ElemFromTo new ->
+        (if model.editing && (validConnect new) then
+             case (model.drawStart, model.drawEnd) of
+                 (Just start, Just end) ->
+                     { model | sourceTarget = new :: model.sourceTarget
+                     , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
+                     , drawStart = Nothing
+                     , drawEnd = Nothing
+                     }
+                 _ ->
+                     { model | drawStart = Nothing
+                     , drawEnd = Nothing
+                     }
+         else
+             { model | drawStart = Nothing
+             , drawEnd = Nothing
+             }
         , Cmd.none
         )
 
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
 
+
+validConnect : (String, String) -> Bool
+validConnect (startId, endId) =
+    if (String.isEmpty startId) || (String.isEmpty endId) then
+        False
+    else
+        True
+                                 
 
 -- SUBS
 
@@ -250,7 +269,7 @@ view model =
                                    drawLine (x, y) (model.mouse.offsetX, model.mouse.offsetY)
                                Nothing ->
                                    text ""
-                          ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
+                          ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.sourceTargetDrawing))
                    , div
                          [ class "container" ]
                          [ div [] (List.map (\(id, tf) -> renderElement id tf) (Dict.toList model.textFields))
