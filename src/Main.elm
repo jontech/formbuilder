@@ -71,8 +71,8 @@ type alias Model =
 init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
-  , textFields = Dict.empty
-  , paragraphs = Dict.empty
+  , textFields = Dict.singleton "1" { seq = 1, elem = TextField }
+  , paragraphs = Dict.singleton "1" { seq = 1, elem = Paragraph ""}
   , mouse = MouseMoveData 0 0
   , connections = []
   , drawStart = Nothing
@@ -223,7 +223,7 @@ drawLine (startx, starty) (endx, endy) =
          , x2 (String.fromInt endx)
          , y2 (String.fromInt endy)
          , stroke "blue"
-         , strokeWidth "10"
+         , strokeWidth "4"
          , strokeLinecap "round"
          ] []
 
@@ -249,7 +249,10 @@ view model =
                                Nothing ->
                                    text ""
                           ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.connections))
-                   , div [] (List.map (\(id, tf) -> renderElement id tf) (Dict.toList model.textFields))
-                   , div [] (List.map (\(id, p) -> renderElement id p) (Dict.toList model.paragraphs))
+                   , div
+                         [ class "container" ]
+                         [ div [] (List.map (\(id, tf) -> renderElement id tf) (Dict.toList model.textFields))
+                         , div [] (List.map (\(id, p) -> renderElement id p) (Dict.toList model.paragraphs))
+                         ]
                    ]
            ]
