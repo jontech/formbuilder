@@ -150,7 +150,7 @@ update msg model =
         in
             ({ model | paragraphs = Dict.insert
                    (String.fromInt seq)
-                   (SeqElement seq (Paragraph "Some text"))
+                   (SeqElement seq (Paragraph ""))
                    model.paragraphs
              }
             , Cmd.none
@@ -163,7 +163,9 @@ update msg model =
         let
             start = (model.mouse.offsetX, model.mouse.offsetY)
         in
-            ({ model | drawStart = Just start }, Cmd.none)
+            (if model.editing then { model | drawStart = Just start } else model
+            , Cmd.none
+            )
 
     DrawEnd ->
         case model.drawStart of
@@ -207,7 +209,7 @@ renderElement : String -> SeqElement -> Html Msg
 renderElement elemId seqElem =
     case seqElem.elem of
         TextField ->
-            input [ placeholder "Some text"
+            input [ placeholder "Type something"
                   , id elemId
                   , value ""
                   , onInput (Change elemId)
