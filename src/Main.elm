@@ -2,7 +2,7 @@ port module Main exposing (..)
 
 import Browser
 import Browser.Dom as Dom
-import Html exposing (Html, Attribute, div, input, text, button, p)
+import Html exposing (Html, Attribute, div, input, text, button, p, nav)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput, onClick, on, onMouseUp, onMouseDown)
 import Svg exposing (svg, line)
@@ -255,22 +255,23 @@ drawLine (startx, starty) (endx, endy) =
 
 view : Model -> Html Msg
 view model =
-    div [] [ div [ class "controls"
-                 ] [ button [ onClick NewTextField ] [ text "New text field" ]
-                   , button [ onClick NewParagraph ] [ text "New paragraph" ]
-                   , button [ onClick EditMode ] [ text "Edit mode" ]
-                   ]
-           , div [ id "canvas"
-                 , class (if model.editing then "edit-mode-on" else "")
-                 , on "mousemove" (Decode.map MouseMove decoder)
-                 , onMouseDown DrawStart
-                 , onMouseUp DrawEnd
-                 ] [ let
-                       offset = canvasOffset model
-                     in
-                     svg [ height 600
-                         , width 800
-                         , viewBox "0 0 800 600"
+    div [ class "container" ] [
+         nav [ class "nav mb-2" ]
+             [ button [ class "nav-link", onClick NewTextField ] [ text "New text field" ]
+             , button [ class "nav-link", onClick NewParagraph ] [ text "New paragraph" ]
+             , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
+             ]
+        , div [ id "canvas"
+              , class (if model.editing then "edit-mode-on" else "")
+              , on "mousemove" (Decode.map MouseMove decoder)
+              , onMouseDown DrawStart
+              , onMouseUp DrawEnd
+              ] [ let
+                    offset = canvasOffset model
+                  in
+                      svg [ height 600
+                          , width 800
+                          , viewBox "0 0 800 600"
                          ]
                          ((case model.drawStart of
                                Just (x, y) -> 
@@ -279,8 +280,8 @@ view model =
                                    text ""
                           ) :: (List.map (\connect -> drawLine (offset connect.starts) (offset connect.ends)) model.sourceTargetDrawing))
                    , div
-                         [ class "container" ]
-                         [ div [] (List.map
+                         [ class "row" ]
+                         [ div [ class "col" ] (List.map
                                        (\(elemId, seqElem) ->
                                             case seqElem.elem of
                                                 TextField ->
@@ -288,14 +289,17 @@ view model =
                                                           , id elemId
                                                           , value ""
                                                           , onInput (Change elemId)
+                                                          , class "mb-2"
                                                           ] []
                                                 _ -> text "")
                                        (Dict.toList model.textFields)
                                   )
-                         , div [] (List.map
+                         , div [ class "col" ] (List.map
                                        (\(elemId, seqElem) ->
                                             case seqElem.elem of
-                                                Paragraph val -> p [ id elemId] [ text val ]
+                                                Paragraph val -> div [ class "card mb-2" ] [
+                                                                  div [ id elemId, class "card-body" ] [ text val ]
+                                                                 ]
                                                 _ -> text "")
                                        (Dict.toList model.paragraphs)
                                   )
