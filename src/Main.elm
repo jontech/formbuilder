@@ -181,7 +181,7 @@ update msg model =
             )
 
     MouseMove data ->
-        ({ model | mouse = Debug.log "mouse" data }, Cmd.none)
+        ({ model | mouse = data }, Cmd.none)
 
     DrawStart ->
         let
@@ -206,7 +206,7 @@ update msg model =
                  (model, Cmd.none)
             
     ElemFromTo new ->
-        (if model.editing && (validConnect (Debug.log "new" new)) then
+        (if model.editing && (validConnect new) then
              case (model.drawStart, model.drawEnd) of
                  (Just start, Just end) ->
              
