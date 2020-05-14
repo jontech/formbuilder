@@ -3,15 +3,20 @@ body {
     padding: 0px;
 }
 
-.canvas {
-    width: 1000px;
-    height: 1000px;
+#canvas {
+    width: 800px;
+    height: 600px;
     position: relative;
     border: 1px solid red;
+    margin: 0px auto;
 }
-.canvas > svg {
+#canvas > svg {
     position: absolute;
     z-index: -100;
+}
+
+.edit-mode-on {
+    cursor: crosshair;
 }
 
 .controls {

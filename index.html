@@ -24,6 +24,12 @@
           startEnd[1][1]);
         app.ports.elemFromToUpdate.send([elemStart.id, elemEnd.id]);
       });
+
+      (function() {
+        var canvas = document.getElementById("canvas");
+        console.log(canvas);
+        app.ports.canvasOffsetUpdate.send([canvas.offsetLeft, canvas.offsetTop]);
+      })();
   </script>
 </body>
 

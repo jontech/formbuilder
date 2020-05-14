@@ -1,20 +1,23 @@
 port module Main exposing (..)
 
 import Browser
+import Browser.Dom as Dom
 import Html exposing (Html, Attribute, div, input, text, button, p)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput, onClick, on, onMouseUp, onMouseDown)
 import Svg exposing (svg, line)
 import Svg
 import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
-import Json.Decode as Decode exposing (Decoder, map2, field, float, int)
+import Json.Decode as Decode exposing (Decoder, field, float, int)
 import Dict exposing (Dict)
+
 
 -- PORTS
 
 
 port elemFromTo : ((Int, Int), (Int, Int)) -> Cmd msg
 port elemFromToUpdate : ((String, String) -> msg) -> Sub msg                   
+port canvasOffsetUpdate : ((Int, Int) -> msg) -> Sub msg
 
 
 -- MAIN
@@ -34,8 +37,8 @@ main =
 
 
 type alias MouseMoveData =
-    { offsetX : Int
-    , offsetY : Int
+    { clientX : Int
+    , clientY : Int  
     }
 
 
@@ -66,21 +69,32 @@ type alias Model =
   , drawEnd : Maybe (Int, Int)
   , editing : Bool
   , sourceTarget : List (String, String)
+  , canvasOffset : (Int, Int)
   }
 
 
 init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
-  , textFields = Dict.singleton "1" { seq = 1, elem = TextField }
-  , paragraphs = Dict.singleton "1" { seq = 1, elem = Paragraph ""}
-  , mouse = MouseMoveData 0 0
-  , sourceTargetDrawing = []
-  , drawStart = Nothing
-  , drawEnd = Nothing
-  , editing = False
-  , sourceTarget = []
+   , textFields = Dict.singleton "1" { seq = 1, elem = TextField }
+   , paragraphs = Dict.singleton "1" { seq = 1, elem = Paragraph ""}
+   , mouse = MouseMoveData 0 0
+   , sourceTargetDrawing = []
+   , drawStart = Nothing
+   , drawEnd = Nothing
+   , editing = False
+   , sourceTarget = []
+   , canvasOffset = (0, 0)
   }, Cmd.none)
+
+
+-- SUBS
+
+
+subscriptions : Model -> Sub Msg
+subscriptions _ = Sub.batch [ elemFromToUpdate ElemFromTo
+                            , canvasOffsetUpdate NewCanvasOffset
+                            ]
 
 
 -- UPDATE
@@ -88,7 +102,7 @@ init _ =
 
 decoder : Decoder MouseMoveData
 decoder =
-    map2 MouseMoveData
+    Decode.map2 MouseMoveData
         (field "clientX" int)
         (field "clientY" int)
 
@@ -102,6 +116,7 @@ type Msg
   | DrawEnd
   | ElemFromTo (String, String)
   | EditMode
+  | NewCanvasOffset (Int, Int)
 
 
 nextSeq : List SeqElement -> Int
@@ -119,6 +134,13 @@ appendParagraph newVal seqElem =
      }
 
 
+canvasOffset : Model -> (Int, Int) -> (Int, Int)
+canvasOffset model (x, y) =
+    ( x - (Tuple.first model.canvasOffset)
+    , y - (Tuple.second model.canvasOffset)
+    )
+        
+       
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
@@ -159,11 +181,11 @@ update msg model =
             )
 
     MouseMove data ->
-        ({ model | mouse = data }, Cmd.none)
+        ({ model | mouse = Debug.log "mouse" data }, Cmd.none)
 
     DrawStart ->
         let
-            start = (model.mouse.offsetX, model.mouse.offsetY)
+            start = (model.mouse.clientX, model.mouse.clientY)
         in
             (if model.editing then
                  { model | drawStart = Just start }
@@ -177,16 +199,17 @@ update msg model =
              Just (startX, startY) ->
                  let
                      start = (startX, startY)
-                     end = (model.mouse.offsetX, model.mouse.offsetY)
+                     end = (model.mouse.clientX, model.mouse.clientY)
                  in
                      ({ model | drawEnd = Just end }, elemFromTo (start, end))
              Nothing ->
                  (model, Cmd.none)
             
     ElemFromTo new ->
-        (if model.editing && (validConnect new) then
+        (if model.editing && (validConnect (Debug.log "new" new)) then
              case (model.drawStart, model.drawEnd) of
                  (Just start, Just end) ->
+             
                      { model | sourceTarget = new :: model.sourceTarget
                      , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
                      , drawStart = Nothing
@@ -206,35 +229,16 @@ update msg model =
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
 
+    NewCanvasOffset (x, y) ->
+        ({ model | canvasOffset = (x, y) }, Cmd.none)
+
 
 validConnect : (String, String) -> Bool
 validConnect (startId, endId) =
-    if (String.isEmpty startId) || (String.isEmpty endId) then
-        False
-    else
-        True
-                                 
-
--- SUBS
-
-
-subscriptions : Model -> Sub Msg
-subscriptions _ = elemFromToUpdate ElemFromTo
-
+    (startId /= "canvas") && (endId /= "canvas")
+                                
 
 -- VIEW
-
-renderElement : String -> SeqElement -> Html Msg
-renderElement elemId seqElem =
-    case seqElem.elem of
-        TextField ->
-            input [ placeholder "Type something"
-                  , id elemId
-                  , value ""
-                  , onInput (Change elemId)
-                  ] []
-        Paragraph val ->
-            p [ id elemId ] [ text val ]
 
 
 drawLine : (Int, Int) -> (Int, Int) -> Svg.Svg msg
@@ -256,24 +260,45 @@ view model =
                    , button [ onClick NewParagraph ] [ text "New paragraph" ]
                    , button [ onClick EditMode ] [ text "Edit mode" ]
                    ]
-           , div [ class "canvas"
+           , div [ id "canvas"
+                 , class (if model.editing then "edit-mode-on" else "")
                  , on "mousemove" (Decode.map MouseMove decoder)
                  , onMouseDown DrawStart
                  , onMouseUp DrawEnd
-                 ] [ svg [ height 1000
-                         , width 1000
-                         , viewBox "0 0 1000 1000"
+                 ] [ let
+                       offset = canvasOffset model
+                     in
+                     svg [ height 600
+                         , width 800
+                         , viewBox "0 0 800 600"
                          ]
                          ((case model.drawStart of
                                Just (x, y) -> 
-                                   drawLine (x, y) (model.mouse.offsetX, model.mouse.offsetY)
+                                   drawLine (offset (x, y)) (offset (model.mouse.clientX, model.mouse.clientY))
                                Nothing ->
                                    text ""
-                          ) :: (List.map (\connect -> drawLine connect.starts connect.ends) model.sourceTargetDrawing))
+                          ) :: (List.map (\connect -> drawLine (offset connect.starts) (offset connect.ends)) model.sourceTargetDrawing))
                    , div
                          [ class "container" ]
-                         [ div [] (List.map (\(id, tf) -> renderElement id tf) (Dict.toList model.textFields))
-                         , div [] (List.map (\(id, p) -> renderElement id p) (Dict.toList model.paragraphs))
+                         [ div [] (List.map
+                                       (\(elemId, seqElem) ->
+                                            case seqElem.elem of
+                                                TextField ->
+                                                    input [ placeholder "Type something"
+                                                          , id elemId
+                                                          , value ""
+                                                          , onInput (Change elemId)
+                                                          ] []
+                                                _ -> text "")
+                                       (Dict.toList model.textFields)
+                                  )
+                         , div [] (List.map
+                                       (\(elemId, seqElem) ->
+                                            case seqElem.elem of
+                                                Paragraph val -> p [ id elemId] [ text val ]
+                                                _ -> text "")
+                                       (Dict.toList model.paragraphs)
+                                  )
                          ]
                    ]
            ]
