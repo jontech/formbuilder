@@ -28,8 +28,7 @@
 
       (function() {
         var canvas = document.getElementById("canvas");
-        console.log(canvas);
-        app.ports.canvasOffsetUpdate.send([canvas.offsetLeft, canvas.offsetTop]);
+        app.ports.canvasUpdate.send(JSON.stringify(canvas, ["offsetTop", "offsetLeft", "clientWidth", "clientHeight"]));
       })();
   </script>
 </body>

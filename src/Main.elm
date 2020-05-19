@@ -8,7 +8,7 @@ import Html.Events exposing (onInput, onClick, on, onMouseUp, onMouseDown)
 import Svg exposing (svg, line)
 import Svg
 import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
-import Json.Decode as Decode exposing (Decoder, field, float, int)
+import Json.Decode as Decode exposing (Decoder, field, float, int, decodeString)
 import Dict exposing (Dict)
 
 
@@ -16,8 +16,8 @@ import Dict exposing (Dict)
 
 
 port elemFromTo : ((Int, Int), (Int, Int)) -> Cmd msg
-port elemFromToUpdate : ((String, String) -> msg) -> Sub msg                   
-port canvasOffsetUpdate : ((Int, Int) -> msg) -> Sub msg
+port elemFromToUpdate : ((String, String) -> msg) -> Sub msg
+port canvasUpdate : (String -> msg) -> Sub msg
 
 
 -- MAIN
@@ -51,6 +51,14 @@ type alias SeqElement =
     { seq : Int
     , elem : Element
     }
+
+
+type alias Canvas =
+    { offsetTop : Int
+    , offsetLeft : Int
+    , clientWidth : Int
+    , clientHeight : Int
+    }
           
 
 type alias Line =
@@ -69,7 +77,7 @@ type alias Model =
   , drawEnd : Maybe (Int, Int)
   , editing : Bool
   , sourceTarget : List (String, String)
-  , canvasOffset : (Int, Int)
+  , canvas : Canvas
   }
 
 
@@ -84,7 +92,7 @@ init _ =
    , drawEnd = Nothing
    , editing = False
    , sourceTarget = []
-   , canvasOffset = (0, 0)
+   , canvas = Canvas 0 0 0 0
   }, Cmd.none)
 
 
@@ -93,7 +101,7 @@ init _ =
 
 subscriptions : Model -> Sub Msg
 subscriptions _ = Sub.batch [ elemFromToUpdate ElemFromTo
-                            , canvasOffsetUpdate NewCanvasOffset
+                            , canvasUpdate NewCanvas
                             ]
 
 
@@ -107,6 +115,15 @@ decoder =
         (field "clientY" int)
 
 
+canvasDecoder : Decoder Canvas
+canvasDecoder =
+    Decode.map4 Canvas
+        (field "offsetTop" int)
+        (field "offsetLeft" int)
+        (field "clientWidth" int)
+        (field "clientHeight" int)
+
+
 type Msg
   = Change String String
   | NewTextField
@@ -116,7 +133,7 @@ type Msg
   | DrawEnd
   | ElemFromTo (String, String)
   | EditMode
-  | NewCanvasOffset (Int, Int)
+  | NewCanvas String
 
 
 nextSeq : List SeqElement -> Int
@@ -136,8 +153,8 @@ appendParagraph newVal seqElem =
 
 canvasOffset : Model -> (Int, Int) -> (Int, Int)
 canvasOffset model (x, y) =
-    ( x - (Tuple.first model.canvasOffset)
-    , y - (Tuple.second model.canvasOffset)
+    ( x - model.canvas.offsetLeft
+    , y - model.canvas.offsetTop
     )
         
        
@@ -229,8 +246,13 @@ update msg model =
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
 
-    NewCanvasOffset (x, y) ->
-        ({ model | canvasOffset = (x, y) }, Cmd.none)
+    NewCanvas data ->
+        ( { model | canvas = case (decodeString canvasDecoder data) of
+                                 Ok canvas -> canvas
+                                 Err _ -> Debug.log "error" model.canvas
+          }
+        , Cmd.none
+        )
 
 
 validConnect : (String, String) -> Bool
@@ -269,16 +291,18 @@ view model =
               ] [ let
                     offset = canvasOffset model
                   in
-                      svg [ height 600
-                          , width 800
-                          , viewBox "0 0 800 600"
-                         ]
+                      svg [ height model.canvas.clientHeight
+                          , width model.canvas.clientWidth
+                          , viewBox ("0 0 " ++ (String.fromInt model.canvas.clientWidth) ++ " " ++ (String.fromInt model.canvas.clientHeight))
+                          ]
                          ((case model.drawStart of
                                Just (x, y) -> 
                                    drawLine (offset (x, y)) (offset (model.mouse.clientX, model.mouse.clientY))
                                Nothing ->
                                    text ""
-                          ) :: (List.map (\connect -> drawLine (offset connect.starts) (offset connect.ends)) model.sourceTargetDrawing))
+                          ) :: (List.map
+                                    (\connect -> drawLine (offset connect.starts) (offset connect.ends))
+                                    model.sourceTargetDrawing))
                    , div
                          [ class "row" ]
                          [ div [ class "col" ] (List.map
@@ -289,7 +313,7 @@ view model =
                                                           , id elemId
                                                           , value ""
                                                           , onInput (Change elemId)
-                                                          , class "mb-2"
+                                                          , class "m-2"
                                                           ] []
                                                 _ -> text "")
                                        (Dict.toList model.textFields)
@@ -297,7 +321,7 @@ view model =
                          , div [ class "col" ] (List.map
                                        (\(elemId, seqElem) ->
                                             case seqElem.elem of
-                                                Paragraph val -> div [ class "card mb-2" ] [
+                                                Paragraph val -> div [ class "card m-2" ] [
                                                                   div [ id elemId, class "card-body" ] [ text val ]
                                                                  ]
                                                 _ -> text "")
