@@ -81,6 +81,20 @@ type alias Model =
   }
 
 
+type Msg
+  = Change String String
+  | NewTextField
+  | NewParagraph
+  | MouseMove MouseMoveData
+  | DrawStart
+  | DrawEnd
+  | ElemFromTo (String, String)
+  | EditMode
+  | NewCanvas String
+
+
+-- INIT
+
 init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
@@ -105,7 +119,7 @@ subscriptions _ = Sub.batch [ elemFromToUpdate ElemFromTo
                             ]
 
 
--- UPDATE
+-- JSON
 
 
 decoder : Decoder MouseMoveData
@@ -124,40 +138,9 @@ canvasDecoder =
         (field "clientHeight" int)
 
 
-type Msg
-  = Change String String
-  | NewTextField
-  | NewParagraph
-  | MouseMove MouseMoveData
-  | DrawStart
-  | DrawEnd
-  | ElemFromTo (String, String)
-  | EditMode
-  | NewCanvas String
+-- UPDATE
 
 
-nextSeq : List SeqElement -> Int
-nextSeq elems =
-    List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0 |> (+) 1
-
-        
-appendParagraph : String -> SeqElement -> SeqElement
-appendParagraph newVal seqElem =
-    { seqElem | elem = case seqElem.elem of
-                           Paragraph val ->
-                               Paragraph (val ++ newVal)
-                           _ ->
-                               seqElem.elem
-     }
-
-
-canvasOffset : Model -> (Int, Int) -> (Int, Int)
-canvasOffset model (x, y) =
-    ( x - model.canvas.offsetLeft
-    , y - model.canvas.offsetTop
-    )
-        
-       
 update : Msg -> Model -> ( Model, Cmd msg )
 update msg model =
   case msg of
@@ -226,7 +209,6 @@ update msg model =
         (if model.editing && (validConnect new) then
              case (model.drawStart, model.drawEnd) of
                  (Just start, Just end) ->
-             
                      { model | sourceTarget = new :: model.sourceTarget
                      , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
                      , drawStart = Nothing
@@ -255,24 +237,7 @@ update msg model =
         )
 
 
-validConnect : (String, String) -> Bool
-validConnect (startId, endId) =
-    (startId /= "canvas") && (endId /= "canvas")
-                                
-
 -- VIEW
-
-
-drawLine : (Int, Int) -> (Int, Int) -> Svg.Svg msg
-drawLine (startx, starty) (endx, endy) =
-    line [ x1 (String.fromInt startx)
-         , y1 (String.fromInt starty)
-         , x2 (String.fromInt endx)
-         , y2 (String.fromInt endy)
-         , stroke "blue"
-         , strokeWidth "4"
-         , strokeLinecap "round"
-         ] []
 
 
 view : Model -> Html Msg
@@ -330,3 +295,45 @@ view model =
                          ]
                    ]
            ]
+
+
+-- HELPERS
+
+
+nextSeq : List SeqElement -> Int
+nextSeq elems =
+    List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0 |> (+) 1
+
+        
+appendParagraph : String -> SeqElement -> SeqElement
+appendParagraph newVal seqElem =
+    { seqElem | elem = case seqElem.elem of
+                           Paragraph val ->
+                               Paragraph (val ++ newVal)
+                           _ ->
+                               seqElem.elem
+     }
+
+
+canvasOffset : Model -> (Int, Int) -> (Int, Int)
+canvasOffset model (x, y) =
+    ( x - model.canvas.offsetLeft
+    , y - model.canvas.offsetTop
+    )
+        
+
+validConnect : (String, String) -> Bool
+validConnect (startId, endId) =
+    (startId /= "canvas") && (endId /= "canvas")
+
+
+drawLine : (Int, Int) -> (Int, Int) -> Svg.Svg msg
+drawLine (startx, starty) (endx, endy) =
+    line [ x1 (String.fromInt startx)
+         , y1 (String.fromInt starty)
+         , x2 (String.fromInt endx)
+         , y2 (String.fromInt endy)
+         , stroke "blue"
+         , strokeWidth "4"
+         , strokeLinecap "round"
+         ] []
