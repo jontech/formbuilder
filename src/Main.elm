@@ -8,7 +8,7 @@ import Html.Events exposing (onInput, onClick, on, onMouseUp, onMouseDown)
 import Svg exposing (svg, line)
 import Svg
 import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
-import Json.Decode as Decode exposing (Decoder, field, float, int, decodeString)
+import Json.Decode as Decode exposing (Decoder, field, float, int, string, decodeString)
 import Dict exposing (Dict)
 
 
@@ -16,7 +16,7 @@ import Dict exposing (Dict)
 
 
 port elemFromTo : ((Int, Int), (Int, Int)) -> Cmd msg
-port elemFromToUpdate : ((String, String) -> msg) -> Sub msg
+port elemFromToUpdate : (String -> msg) -> Sub msg
 port canvasUpdate : (String -> msg) -> Sub msg
 
 
@@ -53,13 +53,18 @@ type alias SeqElement =
     }
 
 
-type alias Canvas =
-    { offsetTop : Int
+type alias ElemData =
+    { id : String
+    , offsetTop : Int
     , offsetLeft : Int
     , clientWidth : Int
     , clientHeight : Int
     }
-          
+
+type alias FromTo =
+    { start : ElemData
+    , end : ElemData
+    }
 
 type alias Line =
     { starts : (Int, Int)
@@ -77,7 +82,7 @@ type alias Model =
   , drawEnd : Maybe (Int, Int)
   , editing : Bool
   , sourceTarget : List (String, String)
-  , canvas : Canvas
+  , canvas : ElemData
   }
 
 
@@ -88,12 +93,13 @@ type Msg
   | MouseMove MouseMoveData
   | DrawStart
   | DrawEnd
-  | ElemFromTo (String, String)
+  | ElemFromTo String
   | EditMode
   | NewCanvas String
 
 
 -- INIT
+
 
 init : () -> ( Model, Cmd msg )
 init _ =
@@ -106,7 +112,7 @@ init _ =
    , drawEnd = Nothing
    , editing = False
    , sourceTarget = []
-   , canvas = Canvas 0 0 0 0
+   , canvas = ElemData "" 0 0 0 0
   }, Cmd.none)
 
 
@@ -129,13 +135,21 @@ decoder =
         (field "clientY" int)
 
 
-canvasDecoder : Decoder Canvas
-canvasDecoder =
-    Decode.map4 Canvas
+elementDecoder : Decoder ElemData
+elementDecoder =
+    Decode.map5 ElemData
+        (field "id" string)
         (field "offsetTop" int)
         (field "offsetLeft" int)
         (field "clientWidth" int)
         (field "clientHeight" int)
+
+
+fromToDecoder : Decoder FromTo
+fromToDecoder =
+    Decode.map2 FromTo
+        (field "start" elementDecoder)
+        (field "end" elementDecoder)
 
 
 -- UPDATE
@@ -205,33 +219,38 @@ update msg model =
              Nothing ->
                  (model, Cmd.none)
             
-    ElemFromTo new ->
-        (if model.editing && (validConnect new) then
-             case (model.drawStart, model.drawEnd) of
-                 (Just start, Just end) ->
-                     { model | sourceTarget = new :: model.sourceTarget
-                     , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
-                     , drawStart = Nothing
+    ElemFromTo data ->
+        case ((decodeString fromToDecoder data), (model.drawStart, model.drawEnd)) of
+            (Ok elem, (Just start, Just end)) ->
+                let
+                    new = (elem.start.id, elem.end.id)
+                in
+                    (if model.editing && (validConnect new) then
+                         { model | sourceTarget = new :: model.sourceTarget
+                         , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
+                         , drawStart = Nothing
+                         , drawEnd = Nothing
+                         }
+                     else
+                         { model | drawStart = Nothing
+                         , drawEnd = Nothing
+                         }
+                    , Cmd.none
+                    )
+            _ ->
+                    ({ model | drawStart = Nothing
                      , drawEnd = Nothing
                      }
-                 _ ->
-                     { model | drawStart = Nothing
-                     , drawEnd = Nothing
-                     }
-         else
-             { model | drawStart = Nothing
-             , drawEnd = Nothing
-             }
-        , Cmd.none
-        )
+                    , Cmd.none
+                    )
 
     EditMode ->
         ({ model | editing = if (model.editing) then False else True }, Cmd.none)
 
     NewCanvas data ->
-        ( { model | canvas = case (decodeString canvasDecoder data) of
+        ( { model | canvas = case (decodeString elementDecoder data) of
                                  Ok canvas -> canvas
-                                 Err _ -> Debug.log "error" model.canvas
+                                 Err _ -> model.canvas
           }
         , Cmd.none
         )
@@ -253,51 +272,66 @@ view model =
               , on "mousemove" (Decode.map MouseMove decoder)
               , onMouseDown DrawStart
               , onMouseUp DrawEnd
-              ] [ let
-                    offset = canvasOffset model
-                  in
-                      svg [ height model.canvas.clientHeight
-                          , width model.canvas.clientWidth
-                          , viewBox ("0 0 " ++ (String.fromInt model.canvas.clientWidth) ++ " " ++ (String.fromInt model.canvas.clientHeight))
-                          ]
-                         ((case model.drawStart of
-                               Just (x, y) -> 
-                                   drawLine (offset (x, y)) (offset (model.mouse.clientX, model.mouse.clientY))
-                               Nothing ->
-                                   text ""
-                          ) :: (List.map
-                                    (\connect -> drawLine (offset connect.starts) (offset connect.ends))
-                                    model.sourceTargetDrawing))
-                   , div
-                         [ class "row" ]
-                         [ div [ class "col" ] (List.map
-                                       (\(elemId, seqElem) ->
-                                            case seqElem.elem of
-                                                TextField ->
-                                                    input [ placeholder "Type something"
-                                                          , id elemId
-                                                          , value ""
-                                                          , onInput (Change elemId)
-                                                          , class "m-2"
-                                                          ] []
-                                                _ -> text "")
-                                       (Dict.toList model.textFields)
-                                  )
-                         , div [ class "col" ] (List.map
-                                       (\(elemId, seqElem) ->
-                                            case seqElem.elem of
-                                                Paragraph val -> div [ class "card m-2" ] [
-                                                                  div [ id elemId, class "card-body" ] [ text val ]
-                                                                 ]
-                                                _ -> text "")
-                                       (Dict.toList model.paragraphs)
-                                  )
-                         ]
-                   ]
+              ] ([ drawing model ] ++ (textFields model) ++ (paragraphs model))
+
            ]
 
 
 -- HELPERS
+
+
+paragraphs : Model -> List (Html.Html msg)
+paragraphs model =
+    (List.map
+         (\(elemId, seqElem) ->
+              case seqElem.elem of
+                  Paragraph val ->
+                      div [ class "card m-2" ] [
+                           div [ id elemId
+                               , class "card-body"
+                               ] [ text val ]
+                          ]
+                  _ ->
+                      text "")
+         (Dict.toList model.paragraphs)
+    )
+
+
+textFields : Model -> List (Html.Html Msg)
+textFields model =
+    (List.map
+         (\(elemId, seqElem) ->
+              case seqElem.elem of
+                  TextField ->
+                      input [ placeholder "Type something"
+                            , id elemId
+                            , value ""
+                            , onInput (Change elemId)
+                            , class "m-2"
+                            ] []
+                  _ ->
+                      text "")
+         (Dict.toList model.textFields)
+    )
+
+
+drawing : Model -> Svg.Svg msg
+drawing model =
+    let
+        offset = canvasOffset model
+    in
+        svg [ height model.canvas.clientHeight
+            , width model.canvas.clientWidth
+            , viewBox ("0 0 " ++ (String.fromInt model.canvas.clientWidth) ++ " " ++ (String.fromInt model.canvas.clientHeight))
+            ]
+        ((case model.drawStart of
+              Just (x, y) -> 
+                  drawLine (offset (x, y)) (offset (model.mouse.clientX, model.mouse.clientY))
+              Nothing ->
+                  text ""
+         ) :: (List.map
+                   (\connect -> drawLine (offset connect.starts) (offset connect.ends))
+                   model.sourceTargetDrawing))
 
 
 nextSeq : List SeqElement -> Int
