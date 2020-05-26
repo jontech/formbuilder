@@ -53,7 +53,7 @@ type alias SeqElement =
     }
 
 
-type alias ElemData =
+type alias ElementAttr =
     { id : String
     , offsetTop : Int
     , offsetLeft : Int
@@ -62,8 +62,8 @@ type alias ElemData =
     }
 
 type alias FromTo =
-    { start : ElemData
-    , end : ElemData
+    { start : ElementAttr
+    , end : ElementAttr
     }
 
 type alias Line =
@@ -82,7 +82,7 @@ type alias Model =
   , drawEnd : Maybe (Int, Int)
   , editing : Bool
   , sourceTarget : List (String, String)
-  , canvas : ElemData
+  , canvas : ElementAttr
   }
 
 
@@ -112,7 +112,7 @@ init _ =
    , drawEnd = Nothing
    , editing = False
    , sourceTarget = []
-   , canvas = ElemData "" 0 0 0 0
+   , canvas = ElementAttr "" 0 0 0 0
   }, Cmd.none)
 
 
@@ -135,9 +135,9 @@ decoder =
         (field "clientY" int)
 
 
-elementDecoder : Decoder ElemData
+elementDecoder : Decoder ElementAttr
 elementDecoder =
-    Decode.map5 ElemData
+    Decode.map5 ElementAttr
         (field "id" string)
         (field "offsetTop" int)
         (field "offsetLeft" int)
