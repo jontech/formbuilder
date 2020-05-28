@@ -76,8 +76,7 @@ type alias Line =
 
     
 type alias Model =
-  { content : String
-  , textFields : Dict String SeqElement
+  { textFields : Dict String SeqElement
   , paragraphs : Dict String SeqElement
   , mouse : MouseMoveData
   , sourceTargetDrawing : List Line
@@ -107,8 +106,7 @@ type Msg
 
 init : () -> ( Model, Cmd msg )
 init _ =
-  ({ content = ""
-   , textFields = Dict.empty
+  ({ textFields = Dict.empty
    , paragraphs = Dict.empty
    , mouse = MouseMoveData 0 0
    , sourceTargetDrawing = []
