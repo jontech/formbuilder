@@ -50,6 +50,7 @@ type Element
 type alias SeqElement =
     { seq : Int
     , elem : Element
+    , pos : (Int, Int)
     }
 
 
@@ -61,10 +62,12 @@ type alias ElementAttr =
     , clientHeight : Int
     }
 
+
 type alias FromTo =
     { start : ElementAttr
     , end : ElementAttr
     }
+
 
 type alias Line =
     { starts : (Int, Int)
@@ -83,19 +86,20 @@ type alias Model =
   , editing : Bool
   , sourceTarget : List (String, String)
   , canvas : ElementAttr
+  , draging : Maybe Element
   }
 
 
 type Msg
   = Change String String
-  | NewTextField
-  | NewParagraph
   | MouseMove MouseMoveData
   | DrawStart
   | DrawEnd
   | ElemFromTo String
   | EditMode
   | NewCanvas String
+  | DragStart Element
+  | DragEnd
 
 
 -- INIT
@@ -104,8 +108,8 @@ type Msg
 init : () -> ( Model, Cmd msg )
 init _ =
   ({ content = ""
-   , textFields = Dict.singleton "1" { seq = 1, elem = TextField }
-   , paragraphs = Dict.singleton "1" { seq = 1, elem = Paragraph ""}
+   , textFields = Dict.empty
+   , paragraphs = Dict.empty
    , mouse = MouseMoveData 0 0
    , sourceTargetDrawing = []
    , drawStart = Nothing
@@ -113,6 +117,7 @@ init _ =
    , editing = False
    , sourceTarget = []
    , canvas = ElementAttr "" 0 0 0 0
+   , draging = Nothing
   }, Cmd.none)
 
 
@@ -128,8 +133,8 @@ subscriptions _ = Sub.batch [ elemFromToUpdate ElemFromTo
 -- JSON
 
 
-decoder : Decoder MouseMoveData
-decoder =
+mouseDecoder : Decoder MouseMoveData
+mouseDecoder =
     Decode.map2 MouseMoveData
         (field "clientX" int)
         (field "clientY" int)
@@ -170,29 +175,47 @@ update msg model =
                        model.paragraphs
          }, Cmd.none)
 
-    NewTextField ->
-        let
-            seq = nextSeq (Dict.values model.textFields)
-        in
-            ({ model | textFields = Dict.insert
-                   (String.fromInt seq)
-                   (SeqElement seq TextField)
-                   model.textFields
-             }
-            , Cmd.none
-            )
+    DragStart elem ->
+        ( { model | draging = Just elem }, Cmd.none )
 
-    NewParagraph ->
-        let
-            seq = nextSeq (Dict.values model.paragraphs)
-        in
-            ({ model | paragraphs = Dict.insert
-                   (String.fromInt seq)
-                   (SeqElement seq (Paragraph ""))
-                   model.paragraphs
-             }
-            , Cmd.none
-            )
+    DragEnd ->
+        case model.draging of
+            Just elem ->
+                case elem of
+                    TextField ->
+                        let
+                            seq = nextSeq (Dict.values model.textFields)
+                        in
+                            ( { model | textFields = (Dict.insert
+                                    (String.fromInt seq)
+                                    (SeqElement
+                                         seq
+                                         TextField
+                                         (model.mouse.clientX, model.mouse.clientY)
+                                    )
+                                    model.textFields)
+                              , draging = Nothing
+                              }
+                            , Cmd.none
+                            )
+                    Paragraph val ->
+                        let
+                            seq = nextSeq (Dict.values model.paragraphs)
+                        in
+                            ( { model | paragraphs = (Dict.insert
+                                    (String.fromInt seq)
+                                    (SeqElement
+                                         seq
+                                         (Paragraph val)
+                                         (model.mouse.clientX, model.mouse.clientY)
+                                    )
+                                    model.paragraphs)
+                              , draging = Nothing
+                              }
+                            , Cmd.none
+                            )
+            Nothing ->
+                (model, Cmd.none)
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
@@ -263,15 +286,14 @@ view : Model -> Html Msg
 view model =
     div [ class "container" ] [
          nav [ class "nav mb-2" ]
-             [ button [ class "nav-link", onClick NewTextField ] [ text "New text field" ]
-             , button [ class "nav-link", onClick NewParagraph ] [ text "New paragraph" ]
+             [ button [ class "nav-link", onMouseDown (DragStart TextField) ] [ text "New text field" ]
+             , button [ class "nav-link", onMouseDown (DragStart (Paragraph "")) ] [ text "New paragraph" ]
              , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
              ]
         , div [ id "canvas"
               , class (if model.editing then "edit-mode-on" else "")
-              , on "mousemove" (Decode.map MouseMove decoder)
-              , onMouseDown DrawStart
-              , onMouseUp DrawEnd
+              , on "mousemove" (Decode.map MouseMove mouseDecoder)
+              , onMouseUp DragEnd
               ] ([ drawing model ] ++ (textFields model) ++ (paragraphs model))
 
            ]
@@ -280,16 +302,23 @@ view model =
 -- HELPERS
 
 
-paragraphs : Model -> List (Html.Html msg)
+paragraphs : Model -> List (Html.Html Msg)
 paragraphs model =
     (List.map
          (\(elemId, seqElem) ->
               case seqElem.elem of
                   Paragraph val ->
-                      div [ class "card m-2" ] [
-                           div [ id elemId
-                               , class "card-body"
-                               ] [ text val ]
+                      let
+                          pos = canvasOffset model seqElem.pos
+                      in
+                      div [ class "card m-2"
+                          , style "position" "absolute"
+                          , Tuple.first pos |> String.fromInt |> (\a -> a ++ "px") |> style "left"
+                          , Tuple.second pos |> String.fromInt |> (\a -> a ++ "px") |> style "top"                                   
+                          ] [ div [ id elemId
+                                  , onClick DrawEnd
+                                  , class "card-body"
+                                  ] [ text val ]
                           ]
                   _ ->
                       text "")
@@ -303,11 +332,18 @@ textFields model =
          (\(elemId, seqElem) ->
               case seqElem.elem of
                   TextField ->
+                      let
+                          pos = canvasOffset model seqElem.pos
+                      in
                       input [ placeholder "Type something"
                             , id elemId
                             , value ""
+                            , onClick DrawStart
                             , onInput (Change elemId)
                             , class "m-2"
+                            , style "position" "absolute"
+                            , Tuple.first pos |> String.fromInt |> (\a -> a ++ "px") |> style "left"
+                            , Tuple.second pos |> String.fromInt |> (\a -> a ++ "px") |> style "top"
                             ] []
                   _ ->
                       text "")
