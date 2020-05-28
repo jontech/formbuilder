@@ -17,6 +17,8 @@ import Dict exposing (Dict)
 
 port elemFromTo : ((Int, Int), (Int, Int)) -> Cmd msg
 port elemFromToUpdate : (String -> msg) -> Sub msg
+
+port updateCanvas : () -> Cmd msg
 port canvasUpdate : (String -> msg) -> Sub msg
 
 
@@ -98,6 +100,7 @@ type Msg
   | NewCanvas String
   | DragStart Element
   | DragEnd
+  | Reset
 
 
 -- INIT
@@ -105,25 +108,28 @@ type Msg
 
 init : () -> ( Model, Cmd msg )
 init _ =
-  ({ elements = Dict.empty
-   , mouse = MouseMoveData 0 0
-   , sourceTargetDrawing = []
-   , drawStart = Nothing
-   , drawEnd = Nothing
-   , editing = False
-   , sourceTarget = []
-   , canvas = ElementAttr "" 0 0 0 0
-   , draging = Nothing
-  }, Cmd.none)
+    ( { elements = Dict.empty
+      , mouse = MouseMoveData 0 0
+      , sourceTargetDrawing = []
+      , drawStart = Nothing
+      , drawEnd = Nothing
+      , editing = False
+      , sourceTarget = []
+      , canvas = ElementAttr "" 0 0 0 0
+      , draging = Nothing
+      }
+    , updateCanvas ()
+    )
 
 
 -- SUBS
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ = Sub.batch [ elemFromToUpdate ElemFromTo
-                            , canvasUpdate NewCanvas
-                            ]
+subscriptions _ =
+    Sub.batch [ elemFromToUpdate ElemFromTo
+              , canvasUpdate NewCanvas
+              ]
 
 
 -- JSON
@@ -258,6 +264,9 @@ update msg model =
         , Cmd.none
         )
 
+    Reset ->
+        init ()
+
 
 -- VIEW
 
@@ -269,6 +278,7 @@ view model =
              [ button [ class "nav-link", onMouseDown (DragStart TextField) ] [ text "New text field" ]
              , button [ class "nav-link", onMouseDown (DragStart (Paragraph "")) ] [ text "New paragraph" ]
              , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
+             , button [ class "nav-link", onClick Reset ] [ text "Reset" ]
              ]
         , div [ id "canvas"
               , class (if model.editing then "edit-mode-on" else "")
