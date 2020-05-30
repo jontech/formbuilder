@@ -4,7 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Main</title>
-  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css" integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk" crossorigin="anonymous">
+  <link rel="stylesheet" href="https://stackpath.bootstrapcdn.com/bootstrap/4.5.0/css/bootstrap.min.css"
+        integrity="sha384-9aIt2nRpC12Uk9gS9baDl411NQApFmC26EwAOH8WgZl5MYYxFfc+NcPb1dKGj7Sk"
+        crossorigin="anonymous">
   <link rel="stylesheet" href="main.css">
   <script src="main.js"></script>
 </head>
@@ -35,10 +37,18 @@
           }));
       });
 
-      (function() {
+      app.ports.updateCanvas.subscribe(function() {
         var canvas = document.getElementById("canvas");
           app.ports.canvasUpdate.send(JSON.stringify(extractAttrs(canvas)));
-      })();
+      });
+
+      app.ports.saveState.subscribe(function(json) {
+        localStorage.setItem('state', json);
+      });
+
+      app.ports.loadState.subscribe(function() {
+        app.ports.loadStateUpdate.send(localStorage.getItem('state'));
+      });
   </script>
 </body>
 

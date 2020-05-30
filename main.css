@@ -8,6 +8,10 @@
     z-index: -100;
 }
 
+#canvas .card {
+    width: 200px;
+}
+
 .edit-mode-on {
     cursor: crosshair;
 }

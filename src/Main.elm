@@ -9,6 +9,7 @@ import Svg exposing (svg, line)
 import Svg
 import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
 import Json.Decode as Decode exposing (Decoder, field, float, int, string, decodeString)
+import Json.Encode as Encode
 import Dict exposing (Dict)
 
 
@@ -21,6 +22,10 @@ port elemFromToUpdate : (String -> msg) -> Sub msg
 port updateCanvas : () -> Cmd msg
 port canvasUpdate : (String -> msg) -> Sub msg
 
+port saveState : String -> Cmd msg
+
+port loadState : () -> Cmd msg
+port loadStateUpdate : (String -> msg) -> Sub msg
 
 -- MAIN
 
@@ -100,6 +105,9 @@ type Msg
   | NewCanvas String
   | DragStart Element
   | DragEnd
+  | Save
+  | Load
+  | StateUpdate String
   | Reset
 
 
@@ -129,6 +137,7 @@ subscriptions : Model -> Sub Msg
 subscriptions _ =
     Sub.batch [ elemFromToUpdate ElemFromTo
               , canvasUpdate NewCanvas
+              , loadStateUpdate StateUpdate
               ]
 
 
@@ -157,6 +166,121 @@ fromToDecoder =
     Decode.map2 FromTo
         (field "start" elementDecoder)
         (field "end" elementDecoder)
+
+
+modelEncoder : Model -> Encode.Value
+modelEncoder model =
+    Encode.object
+        [ ( "elements"
+          , Encode.dict
+              identity
+              (\seqElem ->
+                   case seqElem.elem of
+                       TextField ->
+                           Encode.object
+                               [ ("seq", Encode.int seqElem.seq)
+                               , ("posX", Encode.int (Tuple.first seqElem.pos))
+                               , ("posY", Encode.int (Tuple.second seqElem.pos))
+                               ]
+                       Paragraph text ->
+                           Encode.object
+                               [ ("text", Encode.string text)
+                               , ("seq", Encode.int seqElem.seq)
+                               , ("posX", Encode.int (Tuple.first seqElem.pos))
+                               , ("posY", Encode.int (Tuple.second seqElem.pos))
+                               ]
+               )
+               model.elements
+          )
+        , ( "sourceTargetDrawing"
+          , Encode.list
+              (\line ->
+                   Encode.object
+                   [ ("startX", Encode.int (Tuple.first line.starts))
+                   , ("startY", Encode.int (Tuple.second line.starts))
+                   , ("endX", Encode.int (Tuple.first line.ends))
+                   , ("endY", Encode.int (Tuple.second line.ends))
+                   ]
+              )
+              model.sourceTargetDrawing
+          )
+        , ( "sourceTarget"
+          , Encode.list
+              (\fromTo ->
+                   Encode.object
+                   [ ("from", Encode.string (Tuple.first fromTo))
+                   , ("to", Encode.string (Tuple.second fromTo))
+                   ]
+              )
+              model.sourceTarget
+          )
+        ]
+
+
+elementsDecoder : Decoder (Dict String SeqElement)
+elementsDecoder =
+    Decode.dict (Decode.oneOf   -- ordering: more complex goes first
+                     [ (Decode.map3
+                            (\text seq pos -> SeqElement seq (Paragraph text) pos)
+                            (field "text" string)
+                            (field "seq" int)
+                            (Decode.map2
+                                 Tuple.pair
+                                 (field "posX" int)
+                                 (field "posY" int)
+                            )
+                       )
+                     , (Decode.map2
+                            (\seq pos -> SeqElement seq TextField pos)
+                            (field "seq" int)
+                            (Decode.map2
+                                 Tuple.pair
+                                 (field "posX" int)
+                                 (field "posY" int)
+                            )
+                       )
+                     ]
+                )
+
+
+sourceTargetDrawingDecoder : Decoder (List Line)
+sourceTargetDrawingDecoder =
+    Decode.list (Decode.map2
+                     Line
+                     (Decode.map2
+                          Tuple.pair
+                          (field "startX" int)
+                          (field "startY" int)
+                     )
+                     (Decode.map2
+                          Tuple.pair
+                          (field "endX" int)
+                          (field "endY" int)
+                     )
+                )
+
+
+sourceTargetDecoder : Decoder (List (String, String))
+sourceTargetDecoder =
+    Decode.list (Decode.map2
+                     Tuple.pair
+                     (field "from" string)
+                     (field "to" string)
+                )
+
+
+modelDecoder : Model -> Decoder Model
+modelDecoder model =
+    Decode.map3
+        (\elements sourceTargetDrawing sourceTarget ->
+             { model | elements = elements
+             , sourceTargetDrawing = sourceTargetDrawing
+             , sourceTarget = sourceTarget
+             }
+        )
+        (field "elements" elementsDecoder)
+        (field "sourceTargetDrawing" sourceTargetDrawingDecoder)
+        (field "sourceTarget" sourceTargetDecoder)
 
 
 -- UPDATE
@@ -264,6 +388,23 @@ update msg model =
         , Cmd.none
         )
 
+    Save ->
+        ( model
+        , modelEncoder model |> Encode.encode 0 |> saveState
+        )
+
+    Load ->
+        ( model, loadState () )
+
+    StateUpdate data ->
+        ( case decodeString (modelDecoder model) data of
+              Ok newModel ->
+                  newModel 
+              Err _ ->
+                  model
+        , Cmd.none
+        )
+
     Reset ->
         init ()
 
@@ -278,6 +419,8 @@ view model =
              [ button [ class "nav-link", onMouseDown (DragStart TextField) ] [ text "New text field" ]
              , button [ class "nav-link", onMouseDown (DragStart (Paragraph "")) ] [ text "New paragraph" ]
              , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
+             , button [ class "nav-link", onClick Save ] [ text "Save" ]
+             , button [ class "nav-link", onClick Load ] [ text "Load" ]
              , button [ class "nav-link", onClick Reset ] [ text "Reset" ]
              ]
         , div [ id "canvas"
@@ -334,7 +477,10 @@ renderDrawing model =
     in
         svg [ height model.canvas.clientHeight
             , width model.canvas.clientWidth
-            , viewBox ("0 0 " ++ (String.fromInt model.canvas.clientWidth) ++ " " ++ (String.fromInt model.canvas.clientHeight))
+            , viewBox ("0 0 "
+                           ++ (String.fromInt model.canvas.clientWidth)
+                           ++ " "
+                           ++ (String.fromInt model.canvas.clientHeight))
             ]
         ((case model.drawStart of
               Just (x, y) -> 
