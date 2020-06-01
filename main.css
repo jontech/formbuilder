@@ -2,6 +2,7 @@
     position: relative;
     border: 1px solid grey;
     height: 600px;
+    overflow: scroll;
 }
 #canvas > svg {
     position: absolute;
@@ -10,8 +11,4 @@
 
 #canvas .card {
     width: 200px;
-}
-
-.edit-mode-on {
-    cursor: crosshair;
 }

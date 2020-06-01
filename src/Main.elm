@@ -423,11 +423,13 @@ view model =
              , button [ class "nav-link", onClick Load ] [ text "Load" ]
              , button [ class "nav-link", onClick Reset ] [ text "Reset" ]
              ]
-        , div [ id "canvas"
-              , class (if model.editing then "edit-mode-on" else "")
+        , div
+             ([ id "canvas"
               , on "mousemove" (Decode.map MouseMove mouseDecoder)
               , onMouseUp DragEnd
-              ] ([ renderDrawing model ] ++ (renderElements model))
+              ] ++ if model.editing then [ style "cursor" "crosshair" ] else []
+             )
+             ([ renderDrawing model ] ++ (renderElements model))
 
            ]
 
@@ -455,16 +457,17 @@ renderElements model =
                                       ] [ text val ]
                                 ]
                       TextField ->
-                          input [ placeholder "Type something"
-                                , id elemId
-                                , value ""
-                                , onClick DrawStart
-                                , onInput (Change elemId)
-                                , class "m-2"
-                                , style "position" "absolute"
-                                , Tuple.first pos |> String.fromInt |> px |> style "left"
-                                , Tuple.second pos |> String.fromInt |> px |> style "top"
-                                ] []
+                          input ([ placeholder "Type something"
+                                 , id elemId
+                                 , value ""
+                                 , onClick DrawStart
+                                 , onInput (Change elemId)
+                                 , class "m-2"
+                                 , style "position" "absolute"
+                                 , Tuple.first pos |> String.fromInt |> px |> style "left"
+                                 , Tuple.second pos |> String.fromInt |> px |> style "top"
+                                 ] ++ if model.editing then [style "cursor" "crosshair"] else []
+                                ) []
          )
          (Dict.toList model.elements)
     )
