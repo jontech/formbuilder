@@ -1,14 +1,14 @@
 port module Main exposing (..)
 
 import Browser
-import Browser.Dom as Dom
-import Html exposing (Html, Attribute, div, input, text, button, p, nav)
+
+import Html exposing (Html, div, input, text, button, nav)
 import Html.Attributes exposing (..)
 import Html.Events exposing (onInput, onClick, on, onMouseUp, onMouseDown)
 import Svg exposing (svg, line)
-import Svg
-import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox, preserveAspectRatio)
-import Json.Decode as Decode exposing (Decoder, field, float, int, string, decodeString)
+
+import Svg.Attributes exposing (x1, y1, x2, y2, stroke, strokeWidth, strokeLinecap, viewBox)
+import Json.Decode as Decode exposing (Decoder, field, int, string, decodeString)
 import Json.Encode as Encode
 import Dict exposing (Dict)
 
@@ -220,17 +220,16 @@ modelEncoder model =
 elementsDecoder : Decoder (Dict String SeqElement)
 elementsDecoder =
     Decode.dict (Decode.oneOf   -- ordering: more complex goes first
-                     [ (Decode.map3
-                            (\text seq pos -> SeqElement seq (Paragraph text) pos)
-                            (field "text" string)
-                            (field "seq" int)
-                            (Decode.map2
-                                 Tuple.pair
-                                 (field "posX" int)
-                                 (field "posY" int)
-                            )
-                       )
-                     , (Decode.map2
+                     [ Decode.map3
+                           (\text seq pos -> SeqElement seq (Paragraph text) pos)
+                           (field "text" string)
+                           (field "seq" int)
+                           (Decode.map2
+                                Tuple.pair
+                                (field "posX" int)
+                                (field "posY" int)
+                           )
+                     , Decode.map2
                             (\seq pos -> SeqElement seq TextField pos)
                             (field "seq" int)
                             (Decode.map2
@@ -238,7 +237,6 @@ elementsDecoder =
                                  (field "posX" int)
                                  (field "posY" int)
                             )
-                       )
                      ]
                 )
 
@@ -311,15 +309,14 @@ update msg model =
                     seq = nextSeq (Dict.values model.elements)
                 in
                     ( { model | elements =
-                            (Dict.insert
-                                 (String.fromInt seq)
-                                 (SeqElement
-                                      seq
-                                      elem
-                                      (model.mouse.clientX, model.mouse.clientY)
-                                 )
-                                 model.elements
-                            )
+                            Dict.insert
+                                (String.fromInt seq)
+                                (SeqElement
+                                     seq
+                                     elem
+                                     (model.mouse.clientX, model.mouse.clientY)
+                                )
+                                model.elements
                       , draging = Nothing
                       }
                     , Cmd.none
@@ -353,14 +350,14 @@ update msg model =
                  (model, Cmd.none)
             
     ElemFromTo data ->
-        case ((decodeString fromToDecoder data), (model.drawStart, model.drawEnd)) of
+        case (decodeString fromToDecoder data, (model.drawStart, model.drawEnd)) of
             (Ok elem, (Just start, Just end)) ->
                 let
                     new = (elem.start.id, elem.end.id)
                 in
-                    (if model.editing && (validConnect new) then
+                    (if model.editing && validConnect new then
                          { model | sourceTarget = new :: model.sourceTarget
-                         , sourceTargetDrawing = (Line start end) :: model.sourceTargetDrawing
+                         , sourceTargetDrawing = Line start end :: model.sourceTargetDrawing
                          , drawStart = Nothing
                          , drawEnd = Nothing
                          }
@@ -378,10 +375,10 @@ update msg model =
                     )
 
     EditMode ->
-        ({ model | editing = if (model.editing) then False else True }, Cmd.none)
+        ({ model | editing = not model.editing }, Cmd.none)
 
     NewCanvas data ->
-        ( { model | canvas = case (decodeString elementDecoder data) of
+        ( { model | canvas = case decodeString elementDecoder data of
                                  Ok canvas -> canvas
                                  Err _ -> model.canvas
           }
@@ -429,8 +426,7 @@ view model =
               , onMouseUp DragEnd
               ] ++ if model.editing then [ style "cursor" "crosshair" ] else []
              )
-             ([ renderDrawing model ] ++ (renderElements model))
-
+             ([ renderDrawing model ] ++  renderElements model)
            ]
 
 
@@ -439,11 +435,11 @@ view model =
 
 renderElements : Model -> List (Html.Html Msg)
 renderElements model =
-    (List.map
+     List.map
          (\(elemId, seqElem) ->
               let
                   pos = canvasOffset model seqElem.pos
-                  px = (\a -> a ++ "px")
+                  px = \a -> a ++ "px"
               in
                   case seqElem.elem of
                       Paragraph val ->
@@ -470,7 +466,6 @@ renderElements model =
                                 ) []
          )
          (Dict.toList model.elements)
-    )
 
 
 renderDrawing : Model -> Svg.Svg msg
@@ -481,25 +476,25 @@ renderDrawing model =
         svg [ height model.canvas.clientHeight
             , width model.canvas.clientWidth
             , viewBox ("0 0 "
-                           ++ (String.fromInt model.canvas.clientWidth)
+                           ++  String.fromInt model.canvas.clientWidth
                            ++ " "
-                           ++ (String.fromInt model.canvas.clientHeight))
+                           ++  String.fromInt model.canvas.clientHeight)
             ]
         ((case model.drawStart of
               Just (x, y) -> 
                   drawLine (offset (x, y)) (offset (model.mouse.clientX, model.mouse.clientY))
               Nothing ->
                   text ""
-         ) :: (List.map
-                   (\connect -> drawLine (offset connect.starts) (offset connect.ends))
-                   model.sourceTargetDrawing))
+         ) :: List.map
+                  (\connect -> drawLine (offset connect.starts) (offset connect.ends))
+                  model.sourceTargetDrawing)
 
 
 nextSeq : List SeqElement -> Int
 nextSeq elems =
     List.map (\elem -> elem.seq) elems |> List.maximum |> Maybe.withDefault 0 |> (+) 1
 
-        
+
 appendParagraph : String -> SeqElement -> SeqElement
 appendParagraph newVal seqElem =
     { seqElem | elem = case seqElem.elem of
