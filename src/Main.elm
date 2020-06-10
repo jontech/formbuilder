@@ -417,13 +417,16 @@ update msg model =
 view : Model -> Html Msg
 view model =
     div [ class "container" ] [
-         nav [ class "nav mb-2" ]
-             [ button [ class "nav-link", onClick (DragStart TextField) ] [ text "New text field" ]
-             , button [ class "nav-link", onClick (DragStart (Paragraph "")) ] [ text "New paragraph" ]
-             , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
-             , button [ class "nav-link", onClick Save ] [ text "Save" ]
-             , button [ class "nav-link", onClick Load ] [ text "Load" ]
-             , button [ class "nav-link", onClick Reset ] [ text "Reset" ]
+         let
+             navStyle = "nav-link btn btn-outline-primary mr-1"
+         in
+         nav [ class "nav mb-2 justify-content-center" ]
+             [ button [ class navStyle, onClick (DragStart TextField) ] [ text "New text field" ]
+             , button [ class navStyle, onClick (DragStart (Paragraph "")) ] [ text "New paragraph" ]
+             , button [ class navStyle, onClick EditMode ] [ text "Link elements" ]
+             , button [ class navStyle, onClick Save ] [ text "Save" ]
+             , button [ class navStyle, onClick Load ] [ text "Load" ]
+             , button [ class navStyle, onClick Reset ] [ text "Reset" ]
              ]
         , div
              ([ id "canvas"
