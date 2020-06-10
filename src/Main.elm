@@ -300,7 +300,11 @@ update msg model =
          }, Cmd.none)
 
     DragStart elem ->
-        ( { model | draging = Just elem }, Cmd.none )
+        ( { model | draging = Just elem
+          , editing = True
+          }
+        , Cmd.none
+        )
 
     DragEnd ->
         case model.draging of
@@ -318,11 +322,12 @@ update msg model =
                                 )
                                 model.elements
                       , draging = Nothing
+                      , editing = False
                       }
                     , Cmd.none
                     )
             Nothing ->
-                (model, Cmd.none)
+                ({ model | editing = False }, Cmd.none)
 
     MouseMove data ->
         ({ model | mouse = data }, Cmd.none)
@@ -413,8 +418,8 @@ view : Model -> Html Msg
 view model =
     div [ class "container" ] [
          nav [ class "nav mb-2" ]
-             [ button [ class "nav-link", onMouseDown (DragStart TextField) ] [ text "New text field" ]
-             , button [ class "nav-link", onMouseDown (DragStart (Paragraph "")) ] [ text "New paragraph" ]
+             [ button [ class "nav-link", onClick (DragStart TextField) ] [ text "New text field" ]
+             , button [ class "nav-link", onClick (DragStart (Paragraph "")) ] [ text "New paragraph" ]
              , button [ class "nav-link", onClick EditMode ] [ text "Edit mode" ]
              , button [ class "nav-link", onClick Save ] [ text "Save" ]
              , button [ class "nav-link", onClick Load ] [ text "Load" ]
@@ -423,7 +428,9 @@ view model =
         , div
              ([ id "canvas"
               , on "mousemove" (Decode.map MouseMove mouseDecoder)
-              , onMouseUp DragEnd
+              , onMouseDown DrawStart
+              , onMouseUp DrawEnd                  
+              , onClick DragEnd
               ] ++ if model.editing then [ style "cursor" "crosshair" ] else []
              )
              ([ renderDrawing model ] ++  renderElements model)
@@ -456,7 +463,6 @@ renderElements model =
                           input ([ placeholder "Type something"
                                  , id elemId
                                  , value ""
-                                 , onClick DrawStart
                                  , onInput (Change elemId)
                                  , class "m-2"
                                  , style "position" "absolute"
