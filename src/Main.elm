@@ -533,6 +533,6 @@ drawLine (startx, starty) (endx, endy) =
          , x2 (String.fromInt endx)
          , y2 (String.fromInt endy)
          , stroke "blue"
-         , strokeWidth "4"
+         , strokeWidth "1"
          , strokeLinecap "round"
          ] []
